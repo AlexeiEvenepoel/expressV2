@@ -170,7 +170,7 @@ export class TicketsService {
     return results;
   }
 
-  async scheduleTicketRegistration(userId: number, time: string = '10:00') {
+  async scheduleTicketRegistration(userId: number, time: string = '10:00:00') {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -179,58 +179,67 @@ export class TicketsService {
       throw new Error(`User with ID ${userId} not found`);
     }
 
-    // Parse schedule time (format: HH:MM)
-    const [hour, minute] = time.split(':').map(Number);
+    // Parse schedule time (format: HH:MM:SS or HH:MM)
+    const timeParts = time.split(':').map(Number);
+    const hour = timeParts[0];
+    const minute = timeParts[1];
+    const second = timeParts[2] || 0; // Default to 0 seconds if not specified
 
     // Create a job name based on user
     const jobName = `ticket_registration_${user.id}`;
 
     // Schedule the job - run Monday to Friday at the specified time
-    const job = schedule.scheduleJob(`${minute} ${hour} * * 1-5`, async () => {
-      this.logger.log(
-        `Running scheduled ticket registration for user ${user.name}`,
-      );
+    const job = schedule.scheduleJob(
+      `${second} ${minute} ${hour} * * 1-5`,
+      async () => {
+        this.logger.log(
+          `Running scheduled ticket registration for user ${user.name}`,
+        );
 
-      // Get default number of requests from .env or fallback to 10
-      const defaultRequests =
-        this.configService.get<string>('DEFAULT_REQUESTS');
-      const numRequests = defaultRequests ? parseInt(defaultRequests, 10) : 10;
+        // Get default number of requests from .env or fallback to 10
+        const defaultRequests =
+          this.configService.get<string>('DEFAULT_REQUESTS');
+        const numRequests = defaultRequests
+          ? parseInt(defaultRequests, 10)
+          : 10;
 
-      // Get interval between requests from .env or fallback to 50ms
-      const defaultInterval = this.configService.get<string>(
-        'DEFAULT_INTERVAL_MS',
-      );
-      const intervalMs = defaultInterval ? parseInt(defaultInterval, 10) : 50;
+        // Get interval between requests from .env or fallback to 50ms
+        const defaultInterval = this.configService.get<string>(
+          'DEFAULT_INTERVAL_MS',
+        );
+        const intervalMs = defaultInterval ? parseInt(defaultInterval, 10) : 50;
 
-      // Send multiple requests with short intervals to maximize chances
-      for (let i = 0; i < numRequests; i++) {
-        try {
-          const result = await this.registerTicketWithRetry({
-            dni: user.dni,
-            code: user.code,
-          });
+        // Send multiple requests with short intervals to maximize chances
+        for (let i = 0; i < numRequests; i++) {
+          try {
+            const result = await this.registerTicketWithRetry({
+              dni: user.dni,
+              code: user.code,
+            });
 
-          if (result.code === 201) {
-            this.logger.log(
-              `Successfully registered ticket for ${user.name}: ${JSON.stringify(result)}`,
-            );
-            // Stop sending requests if one succeeds
-            break;
+            if (result.code === 201) {
+              this.logger.log(
+                `Successfully registered ticket for ${user.name}: ${JSON.stringify(result)}`,
+              );
+              // Stop sending requests if one succeeds
+              break;
+            }
+
+            // Small delay between requests
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+          } catch (error) {
+            this.logger.error(`Attempt ${i + 1} failed: ${error.message}`);
           }
-
-          // Small delay between requests
-          await new Promise((resolve) => setTimeout(resolve, intervalMs));
-        } catch (error) {
-          this.logger.error(`Attempt ${i + 1} failed: ${error.message}`);
         }
-      }
-    });
+      },
+    );
 
     // Add job to registry so we can manage it later
     this.schedulerRegistry.addCronJob(jobName, job);
 
     return {
       message: `Scheduled ticket registration for user ${user.name} at ${time}`,
+      jobName: jobName,
     };
   }
 }
