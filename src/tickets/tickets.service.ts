@@ -3,6 +3,7 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import * as schedule from 'node-schedule';
+import * as FormData from 'form-data';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterTicketDto } from './dto/register-ticket.dto';
 import { TicketResponse } from './interfaces/ticket-responde.interface';
@@ -22,6 +23,10 @@ export class TicketsService {
     registerTicketDto: RegisterTicketDto,
   ): Promise<TicketResponse> {
     try {
+      this.logger.log(
+        `Enviando solicitud para DNI: ${registerTicketDto.dni}, Código: ${registerTicketDto.code}`,
+      );
+
       const payload = {
         t1_id: null,
         t1_dni: registerTicketDto.dni,
@@ -32,21 +37,137 @@ export class TicketsService {
         t3_periodos_t3_id: null,
       };
 
-      const headers = {
-        'Content-Type': 'application/json',
-      };
+      this.logger.log(`Payload: ${JSON.stringify(payload)}`);
 
-      const requestConfig: AxiosRequestConfig = {
-        headers,
-      };
+      // Crear FormData y añadir el JSON como campo "data" - CLAVE DEL ÉXITO
+      const form = new FormData();
+      form.append('data', JSON.stringify(payload));
 
-      const response = await axios.post(this.API_URL, payload, requestConfig);
+      const startTime = Date.now();
+      const response = await axios.post(this.API_URL, form, {
+        headers: {
+          ...form.getHeaders(),
+          Referer: 'https://comensales.uncp.edu.pe/', // Importante: añadir el referer
+        },
+      });
+      const endTime = Date.now();
+
+      this.logger.log(`Respuesta recibida (${endTime - startTime}ms)`);
+      this.logger.log(`Código de estado: ${response.status}`);
+      this.logger.log(`Datos: ${JSON.stringify(response.data)}`);
+
+      if (response.data.code === 201) {
+        this.logger.log(
+          `¡REGISTRO EXITOSO! Ticket obtenido: ${response.data.t2_codigo}`,
+        );
+        this.logger.log(`Estudiante: ${response.data.t1_nombres}`);
+        this.logger.log(`Escuela: ${response.data.t1_escuela}`);
+      } else {
+        this.logger.log(`Registro fallido con código: ${response.data.code}`);
+      }
+
       return response.data;
     } catch (error) {
-      this.logger.error(`Failed to register ticket: ${error.message}`);
-      // Return a standard error response to avoid type issues
+      if (axios.isAxiosError(error)) {
+        this.logger.error(`Error de API: ${error.message}`);
+        if (error.response) {
+          this.logger.error(`Estado de respuesta: ${error.response.status}`);
+          this.logger.error(
+            `Datos de respuesta: ${JSON.stringify(error.response.data)}`,
+          );
+        } else if (error.request) {
+          this.logger.error('No se recibió respuesta del servidor');
+        }
+      } else {
+        this.logger.error(`Error inesperado: ${error.message}`);
+      }
+
+      // Devolver objeto de respuesta estándar para errores
       return { code: 500 };
     }
+  }
+
+  async registerTicketWithRetry(
+    registerTicketDto: RegisterTicketDto,
+    maxRetries = 3,
+  ): Promise<TicketResponse> {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await this.registerTicket(registerTicketDto);
+        if (result.code !== 500) {
+          return result;
+        }
+        // Si obtenemos código 500, intentamos de nuevo
+        this.logger.warn(
+          `Intento ${attempt}/${maxRetries} falló con código 500, reintentando...`,
+        );
+      } catch (error) {
+        lastError = error;
+        this.logger.error(
+          `Error en intento ${attempt}/${maxRetries}: ${error.message}`,
+        );
+      }
+
+      // Esperar antes del siguiente intento (backoff exponencial)
+      if (attempt < maxRetries) {
+        const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s, etc.
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    // Si llegamos aquí, todos los intentos fallaron
+    return { code: 500 };
+  }
+
+  async manualRegister(userId: number): Promise<TicketResponse[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+
+    // Get default number of requests from .env or fallback to 10
+    const defaultRequests = this.configService.get<string>('DEFAULT_REQUESTS');
+    const numRequests = defaultRequests ? parseInt(defaultRequests, 10) : 10;
+
+    // Get interval between requests from .env or fallback to 50ms
+    const defaultInterval = this.configService.get<string>(
+      'DEFAULT_INTERVAL_MS',
+    );
+    const intervalMs = defaultInterval ? parseInt(defaultInterval, 10) : 50;
+
+    const results: TicketResponse[] = [];
+
+    for (let i = 0; i < numRequests; i++) {
+      try {
+        // Usar el método con reintentos para mayor fiabilidad
+        const result = await this.registerTicketWithRetry({
+          dni: user.dni,
+          code: user.code,
+        });
+
+        results.push(result);
+
+        if (result.code === 201) {
+          // Éxito - parar de enviar solicitudes
+          this.logger.log(
+            `Registro exitoso conseguido en el intento ${i + 1}. Deteniendo proceso.`,
+          );
+          break;
+        }
+
+        // Pequeño retraso entre solicitudes
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      } catch (error) {
+        this.logger.error(`Intento ${i + 1} falló: ${error.message}`);
+      }
+    }
+
+    return results;
   }
 
   async scheduleTicketRegistration(userId: number, time: string = '10:00') {
@@ -84,7 +205,7 @@ export class TicketsService {
       // Send multiple requests with short intervals to maximize chances
       for (let i = 0; i < numRequests; i++) {
         try {
-          const result = await this.registerTicket({
+          const result = await this.registerTicketWithRetry({
             dni: user.dni,
             code: user.code,
           });
@@ -111,49 +232,5 @@ export class TicketsService {
     return {
       message: `Scheduled ticket registration for user ${user.name} at ${time}`,
     };
-  }
-
-  async manualRegister(userId: number) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new Error(`User with ID ${userId} not found`);
-    }
-
-    // Get default number of requests from .env or fallback to 10
-    const defaultRequests = this.configService.get<string>('DEFAULT_REQUESTS');
-    const numRequests = defaultRequests ? parseInt(defaultRequests, 10) : 10;
-
-    // Get interval between requests from .env or fallback to 50ms
-    const defaultInterval = this.configService.get<string>(
-      'DEFAULT_INTERVAL_MS',
-    );
-    const intervalMs = defaultInterval ? parseInt(defaultInterval, 10) : 50;
-
-    const results: TicketResponse[] = [];
-
-    for (let i = 0; i < numRequests; i++) {
-      try {
-        const result = await this.registerTicket({
-          dni: user.dni,
-          code: user.code,
-        });
-
-        results.push(result);
-
-        if (result.code === 201) {
-          // Success - stop sending requests
-          break;
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, intervalMs));
-      } catch (error) {
-        this.logger.error(`Attempt ${i + 1} failed: ${error.message}`);
-      }
-    }
-
-    return results;
   }
 }
