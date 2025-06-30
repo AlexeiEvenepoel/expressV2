@@ -188,6 +188,21 @@ export class TicketsService {
     // Create a job name based on user
     const jobName = `ticket_registration_${user.id}`;
 
+    // Check if a job already exists for this user and delete it
+    try {
+      const existingJob = this.schedulerRegistry.getCronJob(jobName);
+      if (existingJob) {
+        this.logger.log(`Cancelling existing job for user ${user.id}`);
+        existingJob.stop();
+        this.schedulerRegistry.deleteCronJob(jobName);
+      }
+    } catch (error) {
+      // No existing job found, continue with scheduling
+      this.logger.log(
+        `No existing job found for user ${user.id}, creating new one`,
+      );
+    }
+
     // Schedule the job - run Monday to Friday at the specified time
     const job = schedule.scheduleJob(
       `${second} ${minute} ${hour} * * 1-5`,
@@ -234,11 +249,11 @@ export class TicketsService {
       },
     );
 
-    // Add job to registry so we can manage it later
+    // Add job to registry
     this.schedulerRegistry.addCronJob(jobName, job);
 
     return {
-      message: `Scheduled ticket registration for user ${user.name} at ${time}`,
+      message: `Scheduled ticket registration for user ${user.name} at ${hour}:${minute}:${second}`,
       jobName: jobName,
     };
   }
