@@ -242,4 +242,34 @@ export class TicketsService {
       jobName: jobName,
     };
   }
+
+  async cancelScheduledRegistration(userId: number) {
+    const jobName = `ticket_registration_${userId}`;
+
+    try {
+      // Verificar si existe el trabajo programado
+      const job = this.schedulerRegistry.getCronJob(jobName);
+
+      // Detener el trabajo
+      job.stop();
+
+      // Eliminar del registro
+      this.schedulerRegistry.deleteCronJob(jobName);
+
+      this.logger.log(
+        `Cancelled scheduled registration for user with ID ${userId}`,
+      );
+
+      return {
+        success: true,
+        message: `Programación de registro de ticket cancelada para el usuario ${userId}`,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to cancel job ${jobName}: ${error.message}`);
+      return {
+        success: false,
+        message: `No se encontró ninguna programación para el usuario ${userId}`,
+      };
+    }
+  }
 }

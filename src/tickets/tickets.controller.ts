@@ -1,4 +1,11 @@
-import { Controller, Post, Body, Param, ParseIntPipe } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  ParseIntPipe,
+  Delete,
+} from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { RegisterTicketDto } from './dto/register-ticket.dto';
 import { TicketResponse } from './interfaces/ticket-responde.interface';
@@ -27,5 +34,10 @@ export class TicketsController {
     @Param('userId', ParseIntPipe) userId: number,
   ): Promise<TicketResponse[]> {
     return this.ticketsService.manualRegister(userId);
+  }
+
+  @Delete('schedule/:userId')
+  cancelSchedule(@Param('userId', ParseIntPipe) userId: number) {
+    return this.ticketsService.cancelScheduledRegistration(userId);
   }
 }
