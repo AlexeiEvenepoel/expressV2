@@ -538,6 +538,7 @@
         }
       }
 
+      // Modificar la función testManualRegister para mostrar más detalles
       async function testManualRegister() {
         const userId = document.getElementById('userIdManual').value;
         log(`📤 Enviando registro manual para usuario ${userId}`);
@@ -549,15 +550,24 @@
 
           const result = await response.json();
           const successful = result.filter((r) => r.code === 201).length;
+
+          // Mostrar un resumen
           log(
             `📥 Manual: ${successful}/${result.length} exitosos`,
             successful > 0 ? 'success' : 'error',
+          );
+
+          // Mostrar el detalle completo de la respuesta
+          log(
+            `📋 Respuesta detallada: ${JSON.stringify(result, null, 2)}`,
+            'info',
           );
         } catch (error) {
           log(`❌ Error: ${error.message}`, 'error');
         }
       }
 
+      // Modificar la función testParallelRegister para mostrar más detalles
       async function testParallelRegister() {
         const userId = document.getElementById('userIdParallel').value;
         log(`🚀 Enviando registro paralelo para usuario ${userId}`);
@@ -572,9 +582,17 @@
 
           const result = await response.json();
           const successful = result.filter((r) => r.code === 201).length;
+
+          // Mostrar un resumen
           log(
             `📥 Paralelo: ${successful}/${result.length} exitosos`,
             successful > 0 ? 'success' : 'error',
+          );
+
+          // Mostrar el detalle completo de la respuesta
+          log(
+            `📋 Respuesta detallada: ${JSON.stringify(result, null, 2)}`,
+            'info',
           );
         } catch (error) {
           log(`❌ Error: ${error.message}`, 'error');
@@ -600,6 +618,7 @@
         }
       }
 
+      // Modificar la función testBatchRegister para mostrar más detalles
       async function testBatchRegister() {
         const userIds = document
           .getElementById('userIdsBatch')
@@ -618,9 +637,17 @@
           const successful = Object.values(result).filter(
             (r) => r.code === 201,
           ).length;
+
+          // Mostrar un resumen
           log(
             `📥 Masivo: ${successful}/${userIds.length} exitosos`,
             successful > 0 ? 'success' : 'error',
+          );
+
+          // Mostrar el detalle completo de la respuesta
+          log(
+            `📋 Respuesta detallada: ${JSON.stringify(result, null, 2)}`,
+            'info',
           );
         } catch (error) {
           log(`❌ Error: ${error.message}`, 'error');
