@@ -7,6 +7,7 @@ import * as FormData from 'form-data';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterTicketDto } from './dto/register-ticket.dto';
 import { TicketResponse } from './interfaces/ticket-responde.interface';
+import { TicketWorkerService } from './tickets.worker';
 
 @Injectable()
 export class TicketsService {
@@ -17,6 +18,7 @@ export class TicketsService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private schedulerRegistry: SchedulerRegistry,
+    private readonly ticketWorker: TicketWorkerService,
   ) {}
 
   async registerTicket(
@@ -49,6 +51,7 @@ export class TicketsService {
           ...form.getHeaders(),
           Referer: 'https://comensales.uncp.edu.pe/', // Importante: añadir el referer
         },
+        timeout: 10000, // 10 segundos timeout
       });
       const endTime = Date.now();
 
@@ -91,8 +94,6 @@ export class TicketsService {
     registerTicketDto: RegisterTicketDto,
     maxRetries = 3,
   ): Promise<TicketResponse> {
-    let lastError;
-
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const result = await this.registerTicket(registerTicketDto);
@@ -104,7 +105,6 @@ export class TicketsService {
           `Intento ${attempt}/${maxRetries} falló con código 500, reintentando...`,
         );
       } catch (error) {
-        lastError = error;
         this.logger.error(
           `Error en intento ${attempt}/${maxRetries}: ${error.message}`,
         );
@@ -121,6 +121,160 @@ export class TicketsService {
     return { code: 500 };
   }
 
+  // NUEVO: Registro paralelo para máxima velocidad
+  async manualRegisterParallel(userId: number): Promise<TicketResponse[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+
+    // Determinar el número de solicitudes paralelas
+    const defaultRequests = this.configService.get<string>('DEFAULT_REQUESTS');
+    const numRequests = defaultRequests ? parseInt(defaultRequests, 10) : 10;
+
+    this.logger.log(
+      `Iniciando ${numRequests} solicitudes paralelas para usuario ${user.name}`,
+    );
+
+    // Crear array de promesas para solicitudes paralelas
+    const requestPromises: Promise<TicketResponse>[] = [];
+
+    for (let i = 0; i < numRequests; i++) {
+      // Crear una pequeña variación en el tiempo para no enviar todas exactamente al mismo tiempo
+      const delay = Math.floor(Math.random() * 50); // 0-50ms variación
+
+      const promise = new Promise<TicketResponse>((resolve) =>
+        setTimeout(() => {
+          this.ticketWorker
+            .registerTicket({
+              dni: user.dni,
+              code: user.code,
+            })
+            .then(resolve);
+        }, delay),
+      );
+
+      requestPromises.push(promise);
+    }
+
+    // Ejecutar todas las solicitudes en paralelo y esperar a que todas terminen
+    const results = await Promise.all(requestPromises);
+
+    // Verificar si alguna fue exitosa
+    const successResults = results.filter((r) => r.code === 201);
+    if (successResults.length > 0) {
+      this.logger.log(
+        `¡${successResults.length} registros exitosos! Primero: ${successResults[0].t2_codigo}`,
+      );
+    }
+
+    return results;
+  }
+
+  // NUEVO: Sistema de carrera - finaliza tan pronto como una solicitud tenga éxito
+  async fastRegister(userId: number): Promise<TicketResponse> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new Error(`User with ID ${userId} not found`);
+    }
+
+    // Número de solicitudes simultáneas para la carrera
+    const parallelAttempts = 8;
+
+    this.logger.log(
+      `Iniciando carrera de ${parallelAttempts} solicitudes para usuario ${user.name}`,
+    );
+
+    // Promise.race se resolverá tan pronto como una de las promesas se complete exitosamente
+    const racePromises = Array(parallelAttempts)
+      .fill(0)
+      .map(
+        (_, index) =>
+          new Promise<TicketResponse>((resolve) => {
+            // Pequeña variación para evitar envío exactamente simultáneo
+            const delay = index * 10; // 0ms, 10ms, 20ms, etc.
+            setTimeout(() => {
+              this.ticketWorker
+                .registerTicket({
+                  dni: user.dni,
+                  code: user.code,
+                })
+                .then(resolve);
+            }, delay);
+          }),
+      );
+
+    // Ejecutar carrera y devolver el primer resultado
+    const result = await Promise.race(racePromises);
+
+    if (result.code === 201) {
+      this.logger.log(`¡Carrera ganada! Ticket obtenido: ${result.t2_codigo}`);
+    }
+
+    return result;
+  }
+
+  // NUEVO: Registro masivo para múltiples usuarios
+  async batchRegister(
+    userIds: number[],
+  ): Promise<Record<number, TicketResponse>> {
+    const results: Record<number, TicketResponse> = {};
+
+    this.logger.log(
+      `Iniciando registro masivo para ${userIds.length} usuarios`,
+    );
+
+    // Obtener todos los usuarios de una vez para evitar múltiples consultas a la BD
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: {
+          in: userIds,
+        },
+      },
+    });
+
+    const userMap = new Map(users.map((u) => [u.id, u]));
+
+    // Crear promesas para todos los registros
+    const promises = userIds.map(async (userId) => {
+      const user = userMap.get(userId);
+      if (!user) {
+        results[userId] = { code: 404 }; // Usuario no encontrado
+        return;
+      }
+
+      try {
+        results[userId] = await this.ticketWorker.registerTicket({
+          dni: user.dni,
+          code: user.code,
+        });
+      } catch (error) {
+        this.logger.error(
+          `Error registrando usuario ${userId}: ${error.message}`,
+        );
+        results[userId] = { code: 500 };
+      }
+    });
+
+    // Ejecutar todas las solicitudes en paralelo
+    await Promise.all(promises);
+
+    const successCount = Object.values(results).filter(
+      (r) => r.code === 201,
+    ).length;
+    this.logger.log(
+      `Registro masivo completado: ${successCount}/${userIds.length} exitosos`,
+    );
+
+    return results;
+  }
+
   async manualRegister(userId: number): Promise<TicketResponse[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -132,7 +286,7 @@ export class TicketsService {
 
     // Get default number of requests from .env or fallback to 10
     const defaultRequests = this.configService.get<string>('DEFAULT_REQUESTS');
-    const numRequests = defaultRequests ? parseInt(defaultRequests, 10) : 10;
+    const numRequests = defaultRequests ? parseInt(defaultRequests, 10) : 5; // Reducido para secuencial
 
     // Get interval between requests from .env or fallback to 50ms
     const defaultInterval = this.configService.get<string>(
@@ -170,7 +324,19 @@ export class TicketsService {
     return results;
   }
 
-  async scheduleTicketRegistration(userId: number, time: string = '10:00:00') {
+  // NUEVO: Obtener estado del sistema
+  getSystemStatus() {
+    return {
+      workerPool: this.ticketWorker.getQueueStatus(),
+      apiUrl: this.API_URL,
+      configuration: {
+        defaultRequests: this.configService.get('DEFAULT_REQUESTS'),
+        defaultInterval: this.configService.get('DEFAULT_INTERVAL_MS'),
+      },
+    };
+  }
+
+  async scheduleTicketRegistration(userId: number, time: string = '10:00') {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -179,82 +345,46 @@ export class TicketsService {
       throw new Error(`User with ID ${userId} not found`);
     }
 
-    // Parse schedule time (format: HH:MM:SS or HH:MM)
-    const timeParts = time.split(':').map(Number);
-    const hour = timeParts[0];
-    const minute = timeParts[1];
-    const second = timeParts[2] || 0; // Default to 0 seconds if not specified
+    // Parse schedule time (format: HH:MM)
+    const [hour, minute] = time.split(':').map(Number);
 
     // Create a job name based on user
     const jobName = `ticket_registration_${user.id}`;
 
-    // Check if a job already exists for this user and delete it
-    try {
-      const existingJob = this.schedulerRegistry.getCronJob(jobName);
-      if (existingJob) {
-        this.logger.log(`Cancelling existing job for user ${user.id}`);
-        existingJob.stop();
-        this.schedulerRegistry.deleteCronJob(jobName);
-      }
-    } catch (error) {
-      // No existing job found, continue with scheduling
-      this.logger.log(
-        `No existing job found for user ${user.id}, creating new one`,
-      );
-    }
-
     // Schedule the job - run Monday to Friday at the specified time
-    const job = schedule.scheduleJob(
-      `${second} ${minute} ${hour} * * 1-5`,
-      async () => {
-        this.logger.log(
-          `Running scheduled ticket registration for user ${user.name}`,
-        );
+    const job = schedule.scheduleJob(`${minute} ${hour} * * 1-5`, async () => {
+      this.logger.log(
+        `Running scheduled ticket registration for user ${user.name}`,
+      );
 
-        // Get default number of requests from .env or fallback to 10
-        const defaultRequests =
-          this.configService.get<string>('DEFAULT_REQUESTS');
-        const numRequests = defaultRequests
-          ? parseInt(defaultRequests, 10)
-          : 10;
+      // Usar el método paralelo para máxima eficiencia en horarios programados
+      try {
+        const results = await this.manualRegisterParallel(userId);
+        const successResults = results.filter((r) => r.code === 201);
 
-        // Get interval between requests from .env or fallback to 50ms
-        const defaultInterval = this.configService.get<string>(
-          'DEFAULT_INTERVAL_MS',
-        );
-        const intervalMs = defaultInterval ? parseInt(defaultInterval, 10) : 50;
-
-        // Send multiple requests with short intervals to maximize chances
-        for (let i = 0; i < numRequests; i++) {
-          try {
-            const result = await this.registerTicketWithRetry({
-              dni: user.dni,
-              code: user.code,
-            });
-
-            if (result.code === 201) {
-              this.logger.log(
-                `Successfully registered ticket for ${user.name}: ${JSON.stringify(result)}`,
-              );
-              // Stop sending requests if one succeeds
-              break;
-            }
-
-            // Small delay between requests
-            await new Promise((resolve) => setTimeout(resolve, intervalMs));
-          } catch (error) {
-            this.logger.error(`Attempt ${i + 1} failed: ${error.message}`);
-          }
+        if (successResults.length > 0) {
+          this.logger.log(
+            `¡Programación exitosa! ${successResults.length} tickets obtenidos para ${user.name}`,
+          );
+        } else {
+          this.logger.warn(
+            `Programación falló para ${user.name} - ningún ticket obtenido`,
+          );
         }
-      },
-    );
+      } catch (error) {
+        this.logger.error(
+          `Error en programación para ${user.name}: ${error.message}`,
+        );
+      }
+    });
 
-    // Add job to registry
+    // Add job to registry so we can manage it later
     this.schedulerRegistry.addCronJob(jobName, job);
 
     return {
-      message: `Scheduled ticket registration for user ${user.name} at ${hour}:${minute}:${second}`,
-      jobName: jobName,
+      message: `Scheduled parallel ticket registration for user ${user.name} at ${time}`,
+      method: 'parallel',
+      jobName,
     };
   }
 
@@ -262,29 +392,13 @@ export class TicketsService {
     const jobName = `ticket_registration_${userId}`;
 
     try {
-      // Verificar si existe el trabajo programado
-      const job = this.schedulerRegistry.getCronJob(jobName);
-
-      // Detener el trabajo
-      job.stop();
-
-      // Eliminar del registro
       this.schedulerRegistry.deleteCronJob(jobName);
-
-      this.logger.log(
-        `Cancelled scheduled registration for user with ID ${userId}`,
-      );
-
       return {
-        success: true,
-        message: `Programación de registro de ticket cancelada para el usuario ${userId}`,
+        message: `Scheduled registration cancelled for user ${userId}`,
+        jobName,
       };
     } catch (error) {
-      this.logger.error(`Failed to cancel job ${jobName}: ${error.message}`);
-      return {
-        success: false,
-        message: `No se encontró ninguna programación para el usuario ${userId}`,
-      };
+      throw new Error(`No scheduled job found for user ${userId}`);
     }
   }
 }

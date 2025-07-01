@@ -5,10 +5,15 @@ import {
   Param,
   ParseIntPipe,
   Delete,
+  Get,
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { RegisterTicketDto } from './dto/register-ticket.dto';
 import { TicketResponse } from './interfaces/ticket-responde.interface';
+import {
+  BatchRegisterDto,
+  ParallelRegisterDto,
+} from './dto/batch-register.dto';
 
 @Controller('tickets')
 export class TicketsController {
@@ -34,6 +39,36 @@ export class TicketsController {
     @Param('userId', ParseIntPipe) userId: number,
   ): Promise<TicketResponse[]> {
     return this.ticketsService.manualRegister(userId);
+  }
+
+  // NUEVO: Registro paralelo ultra-rápido
+  @Post('parallel/:userId')
+  parallelRegister(
+    @Param('userId', ParseIntPipe) userId: number,
+  ): Promise<TicketResponse[]> {
+    return this.ticketsService.manualRegisterParallel(userId);
+  }
+
+  // NUEVO: Registro con sistema de carrera (devuelve el primer éxito)
+  @Post('fast/:userId')
+  fastRegister(
+    @Param('userId', ParseIntPipe) userId: number,
+  ): Promise<TicketResponse> {
+    return this.ticketsService.fastRegister(userId);
+  }
+
+  // NUEVO: Registro masivo para múltiples usuarios
+  @Post('batch-register')
+  batchRegister(
+    @Body() batchDto: BatchRegisterDto,
+  ): Promise<Record<number, TicketResponse>> {
+    return this.ticketsService.batchRegister(batchDto.userIds);
+  }
+
+  // NUEVO: Estado del sistema
+  @Get('status')
+  getSystemStatus() {
+    return this.ticketsService.getSystemStatus();
   }
 
   @Delete('schedule/:userId')

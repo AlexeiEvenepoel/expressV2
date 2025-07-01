@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cliente de Test - Sistema de Tickets</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .section {
+        border: 1px solid #ddd;
+        margin: 20px 0;
+        padding: 20px;
+        border-radius: 8px;
+      }
+      .status {
+        padding: 10px;
+        margin: 10px 0;
+        border-radius: 4px;
+      }
+      .success {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+      .info {
+        background-color: #d1ecf1;
+        color: #0c5460;
+      }
+      button {
+        padding: 10px 15px;
+        margin: 5px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .btn-primary {
+        background-color: #007bff;
+        color: white;
+      }
+      .btn-success {
+        background-color: #28a745;
+        color: white;
+      }
+      .btn-warning {
+        background-color: #ffc107;
+        color: black;
+      }
+      .btn-danger {
+        background-color: #dc3545;
+        color: white;
+      }
+      input,
+      select {
+        padding: 8px;
+        margin: 5px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      #log {
+        height: 300px;
+        overflow-y: scroll;
+        background-color: #f8f9fa;
+        padding: 10px;
+        font-family: monospace;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Sistema de Registro de Tickets - Cliente de Prueba</h1>
+
+    <div class="section">
+      <h2>Conexión WebSocket</h2>
+      <button id="connectBtn" class="btn-primary">Conectar</button>
+      <button id="disconnectBtn" class="btn-danger">Desconectar</button>
+      <div id="connectionStatus" class="status info">Desconectado</div>
+    </div>
+
+    <div class="section">
+      <h2>Tests de API REST</h2>
+
+      <h3>1. Registro Simple</h3>
+      <input type="text" id="dniSimple" placeholder="DNI" value="73740592" />
+      <input
+        type="text"
+        id="codeSimple"
+        placeholder="Código"
+        value="2021101380G"
+      />
+      <button onclick="testSimpleRegister()" class="btn-primary">
+        Registrar Ticket
+      </button>
+
+      <h3>2. Registro Manual (Usuario en BD)</h3>
+      <input type="number" id="userIdManual" placeholder="User ID" value="1" />
+      <button onclick="testManualRegister()" class="btn-primary">
+        Registro Manual
+      </button>
+
+      <h3>3. Registro Paralelo (Ultra Rápido)</h3>
+      <input
+        type="number"
+        id="userIdParallel"
+        placeholder="User ID"
+        value="1"
+      />
+      <button onclick="testParallelRegister()" class="btn-success">
+        Registro Paralelo
+      </button>
+
+      <h3>4. Registro Fast (Carrera)</h3>
+      <input type="number" id="userIdFast" placeholder="User ID" value="1" />
+      <button onclick="testFastRegister()" class="btn-warning">
+        Registro Fast
+      </button>
+
+      <h3>5. Registro Masivo</h3>
+      <input
+        type="text"
+        id="userIdsBatch"
+        placeholder="User IDs (separados por coma)"
+        value="1,2,3"
+      />
+      <button onclick="testBatchRegister()" class="btn-danger">
+        Registro Masivo
+      </button>
+
+      <h3>6. Estado del Sistema</h3>
+      <button onclick="getSystemStatus()" class="btn-primary">
+        Obtener Estado
+      </button>
+    </div>
+
+    <div class="section">
+      <h2>Tests WebSocket</h2>
+
+      <h3>Registro via WebSocket</h3>
+      <input type="text" id="dniWS" placeholder="DNI" value="73740592" />
+      <input type="text" id="codeWS" placeholder="Código" value="2021101380G" />
+      <button onclick="testWebSocketRegister()" class="btn-success">
+        Registrar via WS
+      </button>
+
+      <h3>Registro Paralelo via WebSocket</h3>
+      <input type="number" id="userIdWS" placeholder="User ID" value="1" />
+      <input type="number" id="attemptsWS" placeholder="Intentos" value="8" />
+      <button onclick="testWebSocketParallel()" class="btn-warning">
+        Paralelo via WS
+      </button>
+    </div>
+
+    <div class="section">
+      <h2>Log de Eventos</h2>
+      <button onclick="clearLog()" class="btn-danger">Limpiar Log</button>
+      <div id="log"></div>
+    </div>
+
+    <script>
+      let socket = null;
+      const API_BASE = 'http://localhost:3000';
+
+      function log(message, type = 'info') {
+        const logDiv = document.getElementById('log');
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = type;
+        entry.innerHTML = `[${timestamp}] ${message}`;
+        logDiv.appendChild(entry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+      }
+
+      function clearLog() {
+        document.getElementById('log').innerHTML = '';
+      }
+
+      // WebSocket Connection
+      document.getElementById('connectBtn').onclick = function () {
+        if (socket) return;
+
+        socket = io('http://localhost:3000');
+
+        socket.on('connect', () => {
+          log('✅ Conectado al WebSocket', 'success');
+          document.getElementById('connectionStatus').innerHTML = 'Conectado';
+          document.getElementById('connectionStatus').className =
+            'status success';
+        });
+
+        socket.on('disconnect', () => {
+          log('❌ Desconectado del WebSocket', 'error');
+          document.getElementById('connectionStatus').innerHTML =
+            'Desconectado';
+          document.getElementById('connectionStatus').className =
+            'status error';
+        });
+
+        socket.on('registerStatus', (data) => {
+          log(`📊 Estado: ${data.status} - ${data.message}`, 'info');
+        });
+
+        socket.on('registerResult', (data) => {
+          log(
+            `📋 Resultado: ${JSON.stringify(data)}`,
+            data.code === 201 ? 'success' : 'error',
+          );
+        });
+
+        socket.on('registerError', (data) => {
+          log(`❌ Error: ${data.message}`, 'error');
+        });
+
+        socket.on('parallelResults', (data) => {
+          log(`🏃‍♂️ Paralelo: ${data.successful}/${data.total} exitosos`, 'info');
+        });
+
+        socket.on('globalStatus', (data) => {
+          log(`🌐 Global: ${data.message}`, 'info');
+        });
+      };
+
+      document.getElementById('disconnectBtn').onclick = function () {
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+        }
+      };
+
+      // API REST Tests
+      async function testSimpleRegister() {
+        const dni = document.getElementById('dniSimple').value;
+        const code = document.getElementById('codeSimple').value;
+
+        log(`📤 Enviando registro simple para DNI: ${dni}`);
+
+        try {
+          const response = await fetch(`${API_BASE}/tickets/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dni, code }),
+          });
+
+          const result = await response.json();
+          log(
+            `📥 Respuesta: ${JSON.stringify(result)}`,
+            result.code === 201 ? 'success' : 'error',
+          );
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      async function testManualRegister() {
+        const userId = document.getElementById('userIdManual').value;
+        log(`📤 Enviando registro manual para usuario ${userId}`);
+
+        try {
+          const response = await fetch(`${API_BASE}/tickets/manual/${userId}`, {
+            method: 'POST',
+          });
+
+          const result = await response.json();
+          const successful = result.filter((r) => r.code === 201).length;
+          log(
+            `📥 Manual: ${successful}/${result.length} exitosos`,
+            successful > 0 ? 'success' : 'error',
+          );
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      async function testParallelRegister() {
+        const userId = document.getElementById('userIdParallel').value;
+        log(`🚀 Enviando registro paralelo para usuario ${userId}`);
+
+        try {
+          const response = await fetch(
+            `${API_BASE}/tickets/parallel/${userId}`,
+            {
+              method: 'POST',
+            },
+          );
+
+          const result = await response.json();
+          const successful = result.filter((r) => r.code === 201).length;
+          log(
+            `📥 Paralelo: ${successful}/${result.length} exitosos`,
+            successful > 0 ? 'success' : 'error',
+          );
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      async function testFastRegister() {
+        const userId = document.getElementById('userIdFast').value;
+        log(`⚡ Enviando registro fast para usuario ${userId}`);
+
+        try {
+          const response = await fetch(`${API_BASE}/tickets/fast/${userId}`, {
+            method: 'POST',
+          });
+
+          const result = await response.json();
+          log(
+            `📥 Fast: ${JSON.stringify(result)}`,
+            result.code === 201 ? 'success' : 'error',
+          );
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      async function testBatchRegister() {
+        const userIds = document
+          .getElementById('userIdsBatch')
+          .value.split(',')
+          .map((id) => parseInt(id.trim()));
+        log(`📦 Enviando registro masivo para usuarios: ${userIds.join(', ')}`);
+
+        try {
+          const response = await fetch(`${API_BASE}/tickets/batch-register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userIds }),
+          });
+
+          const result = await response.json();
+          const successful = Object.values(result).filter(
+            (r) => r.code === 201,
+          ).length;
+          log(
+            `📥 Masivo: ${successful}/${userIds.length} exitosos`,
+            successful > 0 ? 'success' : 'error',
+          );
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      async function getSystemStatus() {
+        log(`📊 Obteniendo estado del sistema`);
+
+        try {
+          const response = await fetch(`${API_BASE}/tickets/status`);
+          const result = await response.json();
+          log(`📥 Estado: ${JSON.stringify(result, null, 2)}`, 'info');
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      // WebSocket Tests
+      function testWebSocketRegister() {
+        if (!socket) {
+          log('❌ No hay conexión WebSocket', 'error');
+          return;
+        }
+
+        const dni = document.getElementById('dniWS').value;
+        const code = document.getElementById('codeWS').value;
+
+        log(`🔌 Enviando registro via WebSocket para DNI: ${dni}`);
+        socket.emit('registerTicket', { dni, code });
+      }
+
+      function testWebSocketParallel() {
+        if (!socket) {
+          log('❌ No hay conexión WebSocket', 'error');
+          return;
+        }
+
+        const userId = parseInt(document.getElementById('userIdWS').value);
+        const attempts = parseInt(document.getElementById('attemptsWS').value);
+
+        log(
+          `🔌 Enviando registro paralelo via WebSocket para usuario: ${userId}`,
+        );
+        socket.emit('parallelRegister', { userId, attempts });
+      }
+
+      // Auto-connect on load
+      window.onload = function () {
+        log('🚀 Cliente de test iniciado');
+      };
+    </script>
+  </body>
+</html>
