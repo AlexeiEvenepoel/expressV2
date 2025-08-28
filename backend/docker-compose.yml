@@ -1,5 +1,7 @@
+name: expressV2
 services:
   db:
+    name: expressV2-app
     image: postgres:latest
     restart: always
     environment:
@@ -7,4 +9,4 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5438:5432"
+      - '5438:5432'
