@@ -1,13 +1,24 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Enable CORS
   app.enableCors({
-    origin: 'https://expressv2-production.up.railway.app',
+    origin: [
+      'http://localhost:3000',
+      'https://expressv2-production.up.railway.app',
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
   });
+
+  // Serve static files from public directory
+  app.useStaticAssets(join(__dirname, '..', 'public'));
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

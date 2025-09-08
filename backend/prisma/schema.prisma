@@ -14,4 +14,21 @@ model User {
   code      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  schedules Schedule[]
+}
+
+model Schedule {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledDate DateTime
+  scheduledTime String   // Format: HH:MM:SS
+  isActive    Boolean  @default(true)
+  isRecurring Boolean  @default(false)
+  recurringDays String? // JSON array of days: ["monday", "tuesday", ...]
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, scheduledDate, scheduledTime])
 }

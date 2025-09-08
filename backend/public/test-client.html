@@ -355,9 +355,8 @@
         <div class="tooltip">
           ℹ️
           <span class="tooltip-text">
-            Programa el registro automático de tickets para un usuario
-            específico. La programación se ejecutará de lunes a viernes en el
-            horario especificado.
+            Sistema completo de programación de tickets con calendario y
+            opciones recurrentes.
           </span>
         </div>
         <div class="form-group">
@@ -367,19 +366,51 @@
             placeholder="User ID"
             value="1"
           />
+          <input type="date" id="scheduleDate" />
+          <input type="time" id="scheduleTime" value="10:00" />
           <input
             type="text"
-            id="scheduleTime"
-            placeholder="HH:MM:SS"
-            value="10:00:00"
-            pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$"
-            title="Formato: HH:MM:SS (ej: 10:00:00)"
+            id="scheduleDescription"
+            placeholder="Descripción (opcional)"
           />
+          <label><input type="checkbox" id="isRecurring" /> Recurrente</label>
+        </div>
+        <div id="recurringDays" style="display: none; margin-top: 10px">
+          <label><input type="checkbox" id="monday" /> Lunes</label>
+          <label><input type="checkbox" id="tuesday" /> Martes</label>
+          <label><input type="checkbox" id="wednesday" /> Miércoles</label>
+          <label><input type="checkbox" id="thursday" /> Jueves</label>
+          <label><input type="checkbox" id="friday" /> Viernes</label>
+        </div>
+        <div class="form-group">
           <button onclick="scheduleRegistration()" class="btn-success">
-            Programar
+            Crear Programación
+          </button>
+          <button onclick="loadSchedules()" class="btn-primary">
+            Ver Programaciones
+          </button>
+        </div>
+      </div>
+
+      <div class="test-group">
+        <h3>8. Gestión de Programaciones</h3>
+        <div class="tooltip">
+          ℹ️
+          <span class="tooltip-text">
+            Gestiona programaciones existentes: activar, desactivar o eliminar.
+          </span>
+        </div>
+        <div class="form-group">
+          <input
+            type="number"
+            id="scheduleId"
+            placeholder="ID de Programación"
+          />
+          <button onclick="toggleSchedule()" class="btn-warning">
+            Activar/Desactivar
           </button>
           <button onclick="cancelSchedule()" class="btn-danger">
-            Cancelar
+            Eliminar
           </button>
         </div>
       </div>
@@ -747,35 +778,71 @@
       window.onload = function () {
         log('🚀 Cliente de test iniciado');
 
+        // Set default date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        document.getElementById('scheduleDate').value = tomorrow
+          .toISOString()
+          .split('T')[0];
+
+        // Handle recurring checkbox
+        document.getElementById('isRecurring').onchange = function () {
+          const recurringDiv = document.getElementById('recurringDays');
+          recurringDiv.style.display = this.checked ? 'block' : 'none';
+        };
+
         // Auto-connect WebSocket after 1 second
         setTimeout(() => {
           document.getElementById('connectBtn').click();
         }, 1000);
       };
 
-      // Nueva función para programar registros
+      // Funciones de scheduling mejoradas
       async function scheduleRegistration() {
         const userId = document.getElementById('userIdSchedule').value;
+        const date = document.getElementById('scheduleDate').value;
         const time = document.getElementById('scheduleTime').value;
+        const description = document.getElementById(
+          'scheduleDescription',
+        ).value;
+        const isRecurring = document.getElementById('isRecurring').checked;
 
-        // Validar formato HH:MM:SS
-        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
-        if (!timeRegex.test(time)) {
-          log(`❌ Formato de tiempo inválido. Use HH:MM:SS (ej: 10:00:00)`, 'error');
+        if (!userId || !date || !time) {
+          log(`❌ Por favor complete todos los campos requeridos`, 'error');
           return;
         }
 
-        log(`📅 Programando registro para usuario ${userId} a las ${time}`);
+        const scheduleData = {
+          userId: parseInt(userId),
+          scheduledDate: date,
+          scheduledTime: time + ':00',
+          description: description || 'Registro automático',
+          isRecurring: isRecurring,
+        };
 
-        try {
-          const response = await fetch(
-            `${API_BASE}/tickets/schedule/${userId}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ time }),
+        if (isRecurring) {
+          const days = [];
+          ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(
+            (day) => {
+              if (
+                document.getElementById(day) &&
+                document.getElementById(day).checked
+              ) {
+                days.push(day);
+              }
             },
           );
+          scheduleData.recurringDays = days;
+        }
+
+        log(`📅 Creando programación para usuario ${userId}`);
+
+        try {
+          const response = await fetch(`${API_BASE}/schedules`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(scheduleData),
+          });
 
           const result = await response.json();
           log(
@@ -787,19 +854,20 @@
         }
       }
 
-      // Nueva función para cancelar programación
       async function cancelSchedule() {
-        const userId = document.getElementById('userIdSchedule').value;
+        const scheduleId = document.getElementById('scheduleId').value;
 
-        log(`❌ Cancelando programación para usuario ${userId}`);
+        if (!scheduleId) {
+          log(`❌ Por favor ingrese el ID de la programación`, 'error');
+          return;
+        }
+
+        log(`❌ Cancelando programación ${scheduleId}`);
 
         try {
-          const response = await fetch(
-            `${API_BASE}/tickets/schedule/${userId}`,
-            {
-              method: 'DELETE',
-            },
-          );
+          const response = await fetch(`${API_BASE}/schedules/${scheduleId}`, {
+            method: 'DELETE',
+          });
 
           const result = await response.json();
           log(
@@ -808,6 +876,53 @@
           );
         } catch (error) {
           log(`❌ Error al cancelar: ${error.message}`, 'error');
+        }
+      }
+
+      async function loadSchedules() {
+        log(`📋 Cargando programaciones`);
+
+        try {
+          const response = await fetch(`${API_BASE}/schedules`);
+          const schedules = await response.json();
+
+          log(`📋 Programaciones cargadas: ${schedules.length}`, 'success');
+          schedules.forEach((schedule) => {
+            log(
+              `📅 ID: ${schedule.id} - Usuario: ${schedule.user.name} - Fecha: ${schedule.scheduledDate} - Hora: ${schedule.scheduledTime} - Activo: ${schedule.isActive}`,
+              'info',
+            );
+          });
+        } catch (error) {
+          log(`❌ Error cargando programaciones: ${error.message}`, 'error');
+        }
+      }
+
+      async function toggleSchedule() {
+        const scheduleId = document.getElementById('scheduleId').value;
+
+        if (!scheduleId) {
+          log(`❌ Por favor ingrese el ID de la programación`, 'error');
+          return;
+        }
+
+        log(`🔄 Cambiando estado de programación ${scheduleId}`);
+
+        try {
+          const response = await fetch(
+            `${API_BASE}/schedules/${scheduleId}/toggle`,
+            {
+              method: 'PATCH',
+            },
+          );
+
+          const result = await response.json();
+          log(
+            `🔄 Estado cambiado: ${JSON.stringify(result)}`,
+            response.ok ? 'success' : 'error',
+          );
+        } catch (error) {
+          log(`❌ Error cambiando estado: ${error.message}`, 'error');
         }
       }
     </script>
