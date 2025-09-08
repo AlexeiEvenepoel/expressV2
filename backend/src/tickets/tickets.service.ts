@@ -2,7 +2,7 @@ import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import axios, { AxiosRequestConfig } from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { SchedulerRegistry } from '@nestjs/schedule';
-import * as schedule from 'node-schedule';
+import { CronJob } from 'cron';
 import * as FormData from 'form-data';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterTicketDto } from './dto/register-ticket.dto';
@@ -373,37 +373,37 @@ export class TicketsService {
     const jobName = `ticket_registration_${user.id}`;
 
     // Schedule the job - run Monday to Friday at the specified time with seconds
-    const job = schedule.scheduleJob(
-      `${second} ${minute} ${hour} * * 1-5`,
-      async () => {
-        this.logger.log(
-          `Running scheduled ticket registration for user ${user.name} at ${time}`,
-        );
+    const job = new CronJob(`${second} ${minute} ${hour} * * 1-5`, async () => {
+      this.logger.log(
+        `Running scheduled ticket registration for user ${user.name} at ${time}`,
+      );
 
-        // Usar el método paralelo para máxima eficiencia en horarios programados
-        try {
-          const results = await this.manualRegisterParallel(userId);
-          const successResults = results.filter((r) => r.code === 201);
+      // Usar el método paralelo para máxima eficiencia en horarios programados
+      try {
+        const results = await this.manualRegisterParallel(userId);
+        const successResults = results.filter((r) => r.code === 201);
 
-          if (successResults.length > 0) {
-            this.logger.log(
-              `¡Programación exitosa! ${successResults.length} tickets obtenidos para ${user.name}`,
-            );
-          } else {
-            this.logger.warn(
-              `Programación falló para ${user.name} - ningún ticket obtenido`,
-            );
-          }
-        } catch (error) {
-          this.logger.error(
-            `Error en programación para ${user.name}: ${error.message}`,
+        if (successResults.length > 0) {
+          this.logger.log(
+            `¡Programación exitosa! ${successResults.length} tickets obtenidos para ${user.name}`,
+          );
+        } else {
+          this.logger.warn(
+            `Programación falló para ${user.name} - ningún ticket obtenido`,
           );
         }
-      },
-    );
+      } catch (error) {
+        this.logger.error(
+          `Error en programación para ${user.name}: ${error.message}`,
+        );
+      }
+    });
 
-    // Add job to registry so we can manage it later
-    this.schedulerRegistry.addCronJob(jobName, job);
+    // Start job directly to avoid type conflicts
+    job.start();
+
+    // Store job reference for manual cleanup
+    (this as any)[`job_${userId}`] = job;
 
     return {
       message: `Scheduled parallel ticket registration for user ${user.name} at ${time}`,
@@ -415,9 +415,23 @@ export class TicketsService {
 
   async cancelScheduledRegistration(userId: number) {
     const jobName = `ticket_registration_${userId}`;
+    const jobKey = `job_${userId}`;
 
     try {
-      this.schedulerRegistry.deleteCronJob(jobName);
+      // Try to remove from scheduler registry
+      try {
+        this.schedulerRegistry.deleteCronJob(jobName);
+      } catch (error) {
+        // Job not in registry, continue with manual cleanup
+      }
+
+      // Manual cleanup of stored job reference
+      const job = (this as any)[jobKey];
+      if (job) {
+        job.stop();
+        delete (this as any)[jobKey];
+      }
+
       return {
         message: `Scheduled registration cancelled for user ${userId}`,
         jobName,

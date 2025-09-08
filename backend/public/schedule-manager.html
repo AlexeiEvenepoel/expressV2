@@ -484,14 +484,88 @@
             </div>
 
             <div class="form-group">
-              <label for="scheduleTime">Hora:</label>
-              <input
-                type="time"
-                id="scheduleTime"
-                class="form-control"
-                value="10:00"
-                required
-              />
+              <label>Hora (HH:MM:SS):</label>
+              <div
+                style="
+                  display: flex;
+                  gap: 8px;
+                  align-items: center;
+                  flex-wrap: wrap;
+                "
+              >
+                <div style="display: flex; gap: 5px; align-items: center">
+                  <input
+                    type="number"
+                    id="scheduleHour"
+                    class="form-control"
+                    min="0"
+                    max="23"
+                    value="10"
+                    style="width: 70px"
+                    placeholder="HH"
+                    title="Horas (0-23)"
+                  />
+                  <span style="font-weight: bold">:</span>
+                  <input
+                    type="number"
+                    id="scheduleMinute"
+                    class="form-control"
+                    min="0"
+                    max="59"
+                    value="00"
+                    style="width: 70px"
+                    placeholder="MM"
+                    title="Minutos (0-59)"
+                  />
+                  <span style="font-weight: bold">:</span>
+                  <input
+                    type="number"
+                    id="scheduleSecond"
+                    class="form-control"
+                    min="0"
+                    max="59"
+                    value="00"
+                    style="width: 70px"
+                    placeholder="SS"
+                    title="Segundos (0-59)"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onclick="setCurrentTime()"
+                  class="btn btn-sm"
+                  style="
+                    background: #e2e8f0;
+                    padding: 8px 12px;
+                    font-size: 0.8rem;
+                  "
+                >
+                  ⏰ Ahora
+                </button>
+                <button
+                  type="button"
+                  onclick="setCommonTime('10:00:00')"
+                  class="btn btn-sm"
+                  style="
+                    background: #c6f6d5;
+                    padding: 8px 12px;
+                    font-size: 0.8rem;
+                  "
+                >
+                  🍽️ 10:00 AM
+                </button>
+              </div>
+              <small
+                style="
+                  color: #666;
+                  font-size: 0.8rem;
+                  display: block;
+                  margin-top: 5px;
+                "
+              >
+                💡 Tip: Use segundos específicos para evitar conflictos (ej:
+                10:00:15)
+              </small>
             </div>
 
             <div class="form-group">
@@ -569,6 +643,13 @@
             </button>
             <button onclick="loadUpcoming()" class="btn btn-success">
               Próximas
+            </button>
+            <button
+              onclick="debugJobs()"
+              class="btn"
+              style="background: #ffd700; color: #333"
+            >
+              🔍 Debug Jobs
             </button>
           </div>
           <div id="schedulesList" class="schedule-list">
@@ -831,10 +912,22 @@
           return;
         }
 
+        // Get time components
+        const hour = document
+          .getElementById('scheduleHour')
+          .value.padStart(2, '0');
+        const minute = document
+          .getElementById('scheduleMinute')
+          .value.padStart(2, '0');
+        const second = document
+          .getElementById('scheduleSecond')
+          .value.padStart(2, '0');
+        const formattedTime = `${hour}:${minute}:${second}`;
+
         const formData = {
           userId: parseInt(userId),
           scheduledDate: document.getElementById('scheduleDate').value,
-          scheduledTime: document.getElementById('scheduleTime').value + ':00',
+          scheduledTime: formattedTime,
           description: document.getElementById('scheduleDescription').value,
           isRecurring: document.getElementById('isRecurring').checked,
         };
@@ -857,6 +950,28 @@
           formData.recurringDays = days;
         }
 
+        // Validate time format before sending
+        const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+        if (!timePattern.test(formData.scheduledTime)) {
+          log(
+            `❌ Formato de hora inválido. Use HH:MM:SS (ej: 10:00:00)`,
+            'error',
+          );
+          return;
+        }
+
+        // Validate date
+        const scheduleDate = new Date(formData.scheduledDate);
+        if (isNaN(scheduleDate.getTime())) {
+          log(`❌ Fecha inválida`, 'error');
+          return;
+        }
+
+        log(
+          `📤 Enviando programación: ${JSON.stringify(formData, null, 2)}`,
+          'info',
+        );
+
         try {
           const response = await fetch(`${API_BASE}/schedules`, {
             method: 'POST',
@@ -867,21 +982,36 @@
           const result = await response.json();
 
           if (response.ok) {
-            log(`✅ Programación creada exitosamente`, 'success');
+            log(
+              `✅ Programación creada exitosamente (ID: ${result.id})`,
+              'success',
+            );
+            log(
+              `📅 Próxima ejecución programada para: ${result.scheduledDate} ${result.scheduledTime}`,
+              'info',
+            );
             clearForm();
             loadSchedules();
             renderCalendar();
           } else {
-            log(`❌ Error: ${result.message}`, 'error');
+            log(
+              `❌ Error del servidor: ${result.message || JSON.stringify(result)}`,
+              'error',
+            );
+            if (result.error && Array.isArray(result.message)) {
+              result.message.forEach((msg) => log(`   - ${msg}`, 'error'));
+            }
           }
         } catch (error) {
-          log(`❌ Error creando programación: ${error.message}`, 'error');
+          log(`❌ Error de conexión: ${error.message}`, 'error');
         }
       };
 
       function clearForm() {
         document.getElementById('scheduleForm').reset();
-        document.getElementById('scheduleTime').value = '10:00';
+        document.getElementById('scheduleHour').value = '10';
+        document.getElementById('scheduleMinute').value = '00';
+        document.getElementById('scheduleSecond').value = '00';
         document.getElementById('recurringDays').style.display = 'none';
       }
 
@@ -934,6 +1064,9 @@
               ${schedule.isRecurring ? '<p>🔄 Recurrente: ' + JSON.parse(schedule.recurringDays || '[]').join(', ') + '</p>' : ''}
             </div>
             <div class="schedule-actions">
+              <button onclick="testSchedule(${schedule.id})" class="btn btn-sm" style="background: #ffd700; color: #333;">
+                🧪 Test
+              </button>
               <button onclick="toggleSchedule(${schedule.id})" class="btn btn-sm ${schedule.isActive ? 'btn-warning' : 'btn-success'}">
                 ${schedule.isActive ? 'Pausar' : 'Activar'}
               </button>
@@ -979,6 +1112,104 @@
           }
         }
       }
+
+      // Funciones de debug
+      async function debugJobs() {
+        try {
+          const response = await fetch(`${API_BASE}/schedules/debug/jobs`);
+          const result = await response.json();
+
+          log(`🔍 Jobs activos: ${result.totalJobs}`, 'info');
+          result.jobs.forEach((job) => {
+            log(
+              `   📋 Schedule ${job.scheduleId}: Running=${job.running}, Next: ${job.nextExecutions?.[0] || 'N/A'}`,
+              'info',
+            );
+          });
+
+          console.log('Debug Jobs Result:', result);
+        } catch (error) {
+          log(`❌ Error obteniendo debug info: ${error.message}`, 'error');
+        }
+      }
+
+      async function testSchedule(scheduleId) {
+        try {
+          log(`🧪 Probando ejecución de programación ${scheduleId}...`, 'info');
+          const response = await fetch(
+            `${API_BASE}/schedules/debug/test/${scheduleId}`,
+            {
+              method: 'POST',
+            },
+          );
+          const result = await response.json();
+
+          if (response.ok) {
+            log(
+              `✅ Test completado: ${result.successfulAttempts}/${result.totalAttempts} exitosos para ${result.userName}`,
+              'success',
+            );
+          } else {
+            log(`❌ Test falló: ${result.message}`, 'error');
+          }
+        } catch (error) {
+          log(`❌ Error en test: ${error.message}`, 'error');
+        }
+      }
+
+      // Funciones auxiliares para manejo de tiempo
+      function setCurrentTime() {
+        const now = new Date();
+        document.getElementById('scheduleHour').value = now
+          .getHours()
+          .toString()
+          .padStart(2, '0');
+        document.getElementById('scheduleMinute').value = now
+          .getMinutes()
+          .toString()
+          .padStart(2, '0');
+        document.getElementById('scheduleSecond').value = now
+          .getSeconds()
+          .toString()
+          .padStart(2, '0');
+        log(`⏰ Hora establecida a: ${now.toLocaleTimeString()}`, 'info');
+      }
+
+      function setCommonTime(timeStr) {
+        const [hour, minute, second] = timeStr.split(':');
+        document.getElementById('scheduleHour').value = hour;
+        document.getElementById('scheduleMinute').value = minute;
+        document.getElementById('scheduleSecond').value = second || '00';
+        log(`🕐 Hora establecida a: ${timeStr}`, 'info');
+      }
+
+      // Validación en tiempo real de los campos de tiempo
+      document.addEventListener('DOMContentLoaded', function () {
+        const hourInput = document.getElementById('scheduleHour');
+        const minuteInput = document.getElementById('scheduleMinute');
+        const secondInput = document.getElementById('scheduleSecond');
+
+        if (hourInput) {
+          hourInput.addEventListener('input', function () {
+            if (this.value > 23) this.value = 23;
+            if (this.value < 0) this.value = 0;
+          });
+        }
+
+        if (minuteInput) {
+          minuteInput.addEventListener('input', function () {
+            if (this.value > 59) this.value = 59;
+            if (this.value < 0) this.value = 0;
+          });
+        }
+
+        if (secondInput) {
+          secondInput.addEventListener('input', function () {
+            if (this.value > 59) this.value = 59;
+            if (this.value < 0) this.value = 0;
+          });
+        }
+      });
     </script>
   </body>
 </html>

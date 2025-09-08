@@ -356,7 +356,8 @@
           ℹ️
           <span class="tooltip-text">
             Sistema completo de programación de tickets con calendario y
-            opciones recurrentes.
+            opciones recurrentes. Usa formato HH:MM:SS para especificar segundos
+            exactos (ej: 10:00:00).
           </span>
         </div>
         <div class="form-group">
@@ -367,7 +368,18 @@
             value="1"
           />
           <input type="date" id="scheduleDate" />
-          <input type="time" id="scheduleTime" value="10:00" />
+          <input
+            type="text"
+            id="scheduleTime"
+            value="10:00:00"
+            placeholder="HH:MM:SS (ej: 10:00:00)"
+            pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$"
+            title="Formato: HH:MM:SS (ejemplo: 10:00:00)"
+            style="width: 120px"
+          />
+          <small style="color: #666; font-size: 0.8em; margin-left: 5px"
+            >⏰ HH:MM:SS</small
+          >
           <input
             type="text"
             id="scheduleDescription"
@@ -527,6 +539,26 @@
         document.getElementById('log').innerHTML = '';
       }
 
+      // Helper function to get human-readable message for response codes
+      function getCodeMessage(code) {
+        const codeMessages = {
+          201: '✅ Ticket obtenido exitosamente',
+          300: '⚠️ Múltiples opciones disponibles',
+          400: '❌ Solicitud incorrecta',
+          401: '🔒 No autorizado',
+          403: '🚫 Acceso prohibido',
+          404: '🔍 No encontrado',
+          409: '⚡ Conflicto - posiblemente ya registrado',
+          429: '🚦 Demasiadas solicitudes',
+          500: '💥 Error interno del servidor',
+          502: '🌐 Error de gateway',
+          503: '⏳ Servicio no disponible',
+          504: '⏰ Timeout del gateway',
+        };
+
+        return codeMessages[code] || `❓ Código desconocido: ${code}`;
+      }
+
       // WebSocket Connection
       document.getElementById('connectBtn').onclick = function () {
         if (socket) return;
@@ -568,7 +600,26 @@
         });
 
         socket.on('globalStatus', (data) => {
-          log(`🌐 Global: ${data.message}`, 'info');
+          log(`🌐 ${data.message}`, 'info');
+
+          // Show detailed results if available
+          if (data.data && data.data.results) {
+            log(`📊 Detalles de resultados:`, 'info');
+            data.data.results.forEach((result, index) => {
+              const status = result.code === 201 ? 'success' : 'error';
+              log(
+                `   ${index + 1}. Código: ${result.code} - ${getCodeMessage(result.code)}`,
+                status,
+              );
+            });
+
+            if (data.data.summary) {
+              log(
+                `📋 Resumen: ${data.data.successfulAttempts}/${data.data.totalAttempts} exitosos`,
+                'info',
+              );
+            }
+          }
         });
 
         // Nuevos listeners para eventos de programación
@@ -630,11 +681,14 @@
             successful > 0 ? 'success' : 'error',
           );
 
-          // Mostrar el detalle completo de la respuesta
-          log(
-            `📋 Respuesta detallada: ${JSON.stringify(result, null, 2)}`,
-            'info',
-          );
+          // Mostrar códigos individuales
+          result.forEach((res, index) => {
+            const status = res.code === 201 ? 'success' : 'error';
+            log(
+              `   ${index + 1}. Código: ${res.code} - ${getCodeMessage(res.code)}`,
+              status,
+            );
+          });
         } catch (error) {
           log(`❌ Error: ${error.message}`, 'error');
         }
@@ -662,11 +716,14 @@
             successful > 0 ? 'success' : 'error',
           );
 
-          // Mostrar el detalle completo de la respuesta
-          log(
-            `📋 Respuesta detallada: ${JSON.stringify(result, null, 2)}`,
-            'info',
-          );
+          // Mostrar códigos individuales
+          result.forEach((res, index) => {
+            const status = res.code === 201 ? 'success' : 'error';
+            log(
+              `   ${index + 1}. Código: ${res.code} - ${getCodeMessage(res.code)}`,
+              status,
+            );
+          });
         } catch (error) {
           log(`❌ Error: ${error.message}`, 'error');
         }
@@ -717,11 +774,14 @@
             successful > 0 ? 'success' : 'error',
           );
 
-          // Mostrar el detalle completo de la respuesta
-          log(
-            `📋 Respuesta detallada: ${JSON.stringify(result, null, 2)}`,
-            'info',
-          );
+          // Mostrar resultados por usuario
+          Object.entries(result).forEach(([userId, res]) => {
+            const status = res.code === 201 ? 'success' : 'error';
+            log(
+              `   Usuario ${userId}: Código ${res.code} - ${getCodeMessage(res.code)}`,
+              status,
+            );
+          });
         } catch (error) {
           log(`❌ Error: ${error.message}`, 'error');
         }
@@ -812,10 +872,27 @@
           return;
         }
 
+        // Validate time format
+        const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+        let formattedTime = time;
+
+        if (!timePattern.test(time)) {
+          // Try to add seconds if format is HH:MM
+          if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+            formattedTime = time + ':00';
+          } else {
+            log(
+              `❌ Formato de hora inválido. Use HH:MM:SS (ej: 10:00:00)`,
+              'error',
+            );
+            return;
+          }
+        }
+
         const scheduleData = {
           userId: parseInt(userId),
           scheduledDate: date,
-          scheduledTime: time + ':00',
+          scheduledTime: formattedTime,
           description: description || 'Registro automático',
           isRecurring: isRecurring,
         };

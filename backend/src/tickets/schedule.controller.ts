@@ -18,8 +18,12 @@ export class ScheduleController {
   constructor(private readonly scheduleService: ScheduleService) {}
 
   @Post()
-  create(@Body() createScheduleDto: CreateScheduleDto) {
-    return this.scheduleService.createSchedule(createScheduleDto);
+  async create(@Body() createScheduleDto: CreateScheduleDto) {
+    try {
+      return await this.scheduleService.createSchedule(createScheduleDto);
+    } catch (error) {
+      throw error;
+    }
   }
 
   @Get()
@@ -55,5 +59,15 @@ export class ScheduleController {
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.scheduleService.deleteSchedule(id);
+  }
+
+  @Get('debug/jobs')
+  getActiveJobs() {
+    return this.scheduleService.getActiveJobs();
+  }
+
+  @Post('debug/test/:id')
+  async testSchedule(@Param('id', ParseIntPipe) id: number) {
+    return this.scheduleService.testScheduleExecution(id);
   }
 }
