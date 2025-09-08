@@ -171,6 +171,13 @@
         margin: 0;
         min-width: 200px;
       }
+
+      /* Grid layout for sections */
+      .section {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 20px;
+      }
       .form-group {
         display: flex;
         align-items: center;
@@ -183,6 +190,117 @@
         border: none;
         color: white;
         font-size: 18px;
+      }
+
+      /* Estilos para tablas */
+      table {
+        font-size: 14px;
+      }
+
+      table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+      }
+
+      table td {
+        padding: 12px;
+        border-bottom: 1px solid #eee;
+        vertical-align: middle;
+      }
+
+      table tr:hover {
+        background-color: #f8f9fa;
+      }
+
+      .status-badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .status-active {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .status-inactive {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .btn-table {
+        padding: 4px 8px;
+        font-size: 11px;
+        margin: 0 2px;
+        border-radius: 4px;
+      }
+
+      .config-item {
+        margin-bottom: 15px;
+      }
+
+      .config-item label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #555;
+        font-size: 13px;
+      }
+
+      .config-item input {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      /* Modal styles */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+      }
+
+      .modal-content {
+        background-color: white;
+        margin: 5% auto;
+        padding: 20px;
+        border-radius: 8px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #999;
+      }
+
+      .modal-close:hover {
+        color: #333;
       }
     </style>
   </head>
@@ -350,80 +468,151 @@
         </div>
       </div>
 
-      <div class="test-group">
-        <h3>7. Programación de Tickets</h3>
+      <div class="test-group" style="grid-column: 1 / -1">
+        <h3>7. Gestión de Programaciones</h3>
         <div class="tooltip">
           ℹ️
           <span class="tooltip-text">
-            Sistema completo de programación de tickets con calendario y
-            opciones recurrentes. Usa formato HH:MM:SS para especificar segundos
-            exactos (ej: 10:00:00).
+            Sistema completo de gestión de programaciones con tabla interactiva,
+            creación, edición y eliminación de programaciones automáticas.
           </span>
         </div>
-        <div class="form-group">
-          <input
-            type="number"
-            id="userIdSchedule"
-            placeholder="User ID"
-            value="1"
-          />
-          <input type="date" id="scheduleDate" />
-          <input
-            type="text"
-            id="scheduleTime"
-            value="10:00:00"
-            placeholder="HH:MM:SS (ej: 10:00:00)"
-            pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$"
-            title="Formato: HH:MM:SS (ejemplo: 10:00:00)"
-            style="width: 120px"
-          />
-          <small style="color: #666; font-size: 0.8em; margin-left: 5px"
-            >⏰ HH:MM:SS</small
+
+        <!-- Botones de acción principales -->
+        <div class="form-group" style="margin-bottom: 20px">
+          <button onclick="showCreateScheduleModal()" class="btn-success">
+            ➕ Nueva Programación
+          </button>
+          <button onclick="loadSchedulesTable()" class="btn-primary">
+            🔄 Actualizar Tabla
+          </button>
+          <button onclick="loadUsers()" class="btn-primary">
+            👥 Cargar Usuarios
+          </button>
+        </div>
+
+        <!-- Tabla de programaciones -->
+        <div style="overflow-x: auto; margin-top: 15px">
+          <table
+            id="schedulesTable"
+            style="
+              width: 100%;
+              border-collapse: collapse;
+              background: white;
+              border-radius: 8px;
+              overflow: hidden;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            "
           >
-          <input
-            type="text"
-            id="scheduleDescription"
-            placeholder="Descripción (opcional)"
-          />
-          <label><input type="checkbox" id="isRecurring" /> Recurrente</label>
-        </div>
-        <div id="recurringDays" style="display: none; margin-top: 10px">
-          <label><input type="checkbox" id="monday" /> Lunes</label>
-          <label><input type="checkbox" id="tuesday" /> Martes</label>
-          <label><input type="checkbox" id="wednesday" /> Miércoles</label>
-          <label><input type="checkbox" id="thursday" /> Jueves</label>
-          <label><input type="checkbox" id="friday" /> Viernes</label>
-        </div>
-        <div class="form-group">
-          <button onclick="scheduleRegistration()" class="btn-success">
-            Crear Programación
-          </button>
-          <button onclick="loadSchedules()" class="btn-primary">
-            Ver Programaciones
-          </button>
+            <thead
+              style="
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+              "
+            >
+              <tr>
+                <th style="padding: 12px; text-align: left">ID</th>
+                <th style="padding: 12px; text-align: left">Usuario</th>
+                <th style="padding: 12px; text-align: left">Fecha</th>
+                <th style="padding: 12px; text-align: left">Hora</th>
+                <th style="padding: 12px; text-align: left">Descripción</th>
+                <th style="padding: 12px; text-align: left">Recurrente</th>
+                <th style="padding: 12px; text-align: left">Estado</th>
+                <th style="padding: 12px; text-align: center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="schedulesTableBody">
+              <tr>
+                <td
+                  colspan="8"
+                  style="padding: 20px; text-align: center; color: #666"
+                >
+                  Cargando programaciones...
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div class="test-group">
-        <h3>8. Gestión de Programaciones</h3>
+      <div class="test-group" style="grid-column: 1 / -1">
+        <h3>8. Configuración del Sistema</h3>
         <div class="tooltip">
           ℹ️
           <span class="tooltip-text">
-            Gestiona programaciones existentes: activar, desactivar o eliminar.
+            Configuración avanzada del sistema: worker pool, intervalos, número
+            de intentos y URL de la API.
           </span>
         </div>
-        <div class="form-group">
-          <input
-            type="number"
-            id="scheduleId"
-            placeholder="ID de Programación"
-          />
-          <button onclick="toggleSchedule()" class="btn-warning">
-            Activar/Desactivar
+
+        <div class="form-group" style="margin-bottom: 20px">
+          <button onclick="loadSystemConfig()" class="btn-primary">
+            📊 Cargar Configuración
           </button>
-          <button onclick="cancelSchedule()" class="btn-danger">
-            Eliminar
+          <button onclick="saveSystemConfig()" class="btn-success">
+            💾 Guardar Cambios
           </button>
+        </div>
+
+        <!-- Tabla de configuración -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px">
+          <div
+            style="
+              background: white;
+              padding: 20px;
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            "
+          >
+            <h4 style="margin-bottom: 15px; color: #2c3e50">⚙️ Worker Pool</h4>
+            <div class="config-item">
+              <label>Trabajos Actuales:</label>
+              <input
+                type="number"
+                id="currentJobs"
+                readonly
+                style="background: #f5f5f5"
+              />
+            </div>
+            <div class="config-item">
+              <label>Máximo Concurrente:</label>
+              <input type="number" id="maxConcurrent" min="1" max="50" />
+            </div>
+            <div class="config-item">
+              <label>Slots Disponibles:</label>
+              <input
+                type="number"
+                id="availableSlots"
+                readonly
+                style="background: #f5f5f5"
+              />
+            </div>
+          </div>
+
+          <div
+            style="
+              background: white;
+              padding: 20px;
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            "
+          >
+            <h4 style="margin-bottom: 15px; color: #2c3e50">
+              🔧 Configuración
+            </h4>
+            <div class="config-item">
+              <label>Intentos por Defecto:</label>
+              <input type="number" id="defaultRequests" min="1" max="20" />
+            </div>
+            <div class="config-item">
+              <label>Intervalo (ms):</label>
+              <input type="number" id="defaultInterval" min="10" max="5000" />
+            </div>
+            <div class="config-item">
+              <label>URL de la API:</label>
+              <input type="url" id="apiUrl" style="width: 100%" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -494,6 +683,123 @@
         <button class="close-button" id="closeLog">✖</button>
       </div>
       <div id="log"></div>
+    </div>
+
+    <!-- Modal para crear/editar programación -->
+    <div id="scheduleModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="modalTitle">Nueva Programación</h3>
+          <button class="modal-close" onclick="closeScheduleModal()">×</button>
+        </div>
+
+        <form id="scheduleForm">
+          <input type="hidden" id="editScheduleId" />
+
+          <div class="config-item">
+            <label for="modalUserSelect">Usuario:</label>
+            <select id="modalUserSelect" required>
+              <option value="">Seleccionar usuario...</option>
+            </select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px">
+            <div class="config-item">
+              <label for="modalScheduleDate">Fecha:</label>
+              <input type="date" id="modalScheduleDate" required />
+            </div>
+
+            <div class="config-item">
+              <label for="modalScheduleTime">Hora (HH:MM:SS):</label>
+              <input
+                type="text"
+                id="modalScheduleTime"
+                value="10:00:00"
+                pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$"
+                title="Formato: HH:MM:SS"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="config-item">
+            <label for="modalScheduleDescription">Descripción:</label>
+            <input
+              type="text"
+              id="modalScheduleDescription"
+              placeholder="Descripción opcional"
+            />
+          </div>
+
+          <div class="config-item">
+            <label>
+              <input type="checkbox" id="modalIsRecurring" />
+              Programación recurrente
+            </label>
+          </div>
+
+          <div id="modalRecurringDays" style="display: none">
+            <label>Días de la semana:</label>
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+                margin-top: 10px;
+              "
+            >
+              <label
+                ><input type="checkbox" id="modalMonday" value="monday" />
+                Lunes</label
+              >
+              <label
+                ><input type="checkbox" id="modalTuesday" value="tuesday" />
+                Martes</label
+              >
+              <label
+                ><input type="checkbox" id="modalWednesday" value="wednesday" />
+                Miércoles</label
+              >
+              <label
+                ><input type="checkbox" id="modalThursday" value="thursday" />
+                Jueves</label
+              >
+              <label
+                ><input type="checkbox" id="modalFriday" value="friday" />
+                Viernes</label
+              >
+              <label
+                ><input type="checkbox" id="modalSaturday" value="saturday" />
+                Sábado</label
+              >
+              <label
+                ><input type="checkbox" id="modalSunday" value="sunday" />
+                Domingo</label
+              >
+            </div>
+          </div>
+
+          <div
+            style="
+              display: flex;
+              gap: 10px;
+              margin-top: 20px;
+              justify-content: flex-end;
+            "
+          >
+            <button
+              type="button"
+              onclick="closeScheduleModal()"
+              class="btn-danger"
+            >
+              Cancelar
+            </button>
+            <button type="submit" class="btn-success">
+              Guardar Programación
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <script>
@@ -838,169 +1144,385 @@
       window.onload = function () {
         log('🚀 Cliente de test iniciado');
 
-        // Set default date to tomorrow
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        document.getElementById('scheduleDate').value = tomorrow
-          .toISOString()
-          .split('T')[0];
-
-        // Handle recurring checkbox
-        document.getElementById('isRecurring').onchange = function () {
-          const recurringDiv = document.getElementById('recurringDays');
-          recurringDiv.style.display = this.checked ? 'block' : 'none';
-        };
+        // Load initial data
+        loadUsers();
+        loadSchedulesTable();
+        loadSystemConfig();
 
         // Auto-connect WebSocket after 1 second
         setTimeout(() => {
           document.getElementById('connectBtn').click();
         }, 1000);
+
+        // Close modal when clicking outside
+        window.onclick = function (event) {
+          const modal = document.getElementById('scheduleModal');
+          if (event.target === modal) {
+            closeScheduleModal();
+          }
+        };
       };
 
-      // Funciones de scheduling mejoradas
-      async function scheduleRegistration() {
-        const userId = document.getElementById('userIdSchedule').value;
-        const date = document.getElementById('scheduleDate').value;
-        const time = document.getElementById('scheduleTime').value;
-        const description = document.getElementById(
-          'scheduleDescription',
-        ).value;
-        const isRecurring = document.getElementById('isRecurring').checked;
+      // Variables globales
+      let allUsers = [];
+      let allSchedules = [];
+      let systemConfig = {};
 
-        if (!userId || !date || !time) {
-          log(`❌ Por favor complete todos los campos requeridos`, 'error');
-          return;
-        }
+      // Gestión de usuarios
+      async function loadUsers() {
+        try {
+          const response = await fetch(`${API_BASE}/users`);
+          allUsers = await response.json();
 
-        // Validate time format
-        const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
-        let formattedTime = time;
+          const select = document.getElementById('userSelect');
+          if (select) {
+            select.innerHTML =
+              '<option value="">Seleccionar usuario...</option>';
 
-        if (!timePattern.test(time)) {
-          // Try to add seconds if format is HH:MM
-          if (/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
-            formattedTime = time + ':00';
-          } else {
-            log(
-              `❌ Formato de hora inválido. Use HH:MM:SS (ej: 10:00:00)`,
-              'error',
-            );
-            return;
+            allUsers.forEach((user) => {
+              const option = document.createElement('option');
+              option.value = user.id;
+              option.textContent = `${user.name} (${user.dni})`;
+              select.appendChild(option);
+            });
           }
-        }
 
-        const scheduleData = {
-          userId: parseInt(userId),
-          scheduledDate: date,
-          scheduledTime: formattedTime,
-          description: description || 'Registro automático',
-          isRecurring: isRecurring,
-        };
-
-        if (isRecurring) {
-          const days = [];
-          ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].forEach(
-            (day) => {
-              if (
-                document.getElementById(day) &&
-                document.getElementById(day).checked
-              ) {
-                days.push(day);
-              }
-            },
-          );
-          scheduleData.recurringDays = days;
-        }
-
-        log(`📅 Creando programación para usuario ${userId}`);
-
-        try {
-          const response = await fetch(`${API_BASE}/schedules`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(scheduleData),
-          });
-
-          const result = await response.json();
-          log(
-            `📅 Programación: ${JSON.stringify(result)}`,
-            response.ok ? 'success' : 'error',
-          );
+          log(`👥 Cargados ${allUsers.length} usuarios`, 'success');
         } catch (error) {
-          log(`❌ Error al programar: ${error.message}`, 'error');
+          log(`❌ Error cargando usuarios: ${error.message}`, 'error');
         }
       }
 
-      async function cancelSchedule() {
-        const scheduleId = document.getElementById('scheduleId').value;
-
-        if (!scheduleId) {
-          log(`❌ Por favor ingrese el ID de la programación`, 'error');
-          return;
-        }
-
-        log(`❌ Cancelando programación ${scheduleId}`);
-
-        try {
-          const response = await fetch(`${API_BASE}/schedules/${scheduleId}`, {
-            method: 'DELETE',
-          });
-
-          const result = await response.json();
-          log(
-            `❌ Cancelación: ${JSON.stringify(result)}`,
-            response.ok ? 'success' : 'error',
-          );
-        } catch (error) {
-          log(`❌ Error al cancelar: ${error.message}`, 'error');
-        }
-      }
-
-      async function loadSchedules() {
-        log(`📋 Cargando programaciones`);
+      // Funciones de gestión de programaciones
+      async function loadSchedulesTable() {
+        log(`📋 Cargando tabla de programaciones`);
 
         try {
           const response = await fetch(`${API_BASE}/schedules`);
-          const schedules = await response.json();
+          allSchedules = await response.json();
 
-          log(`📋 Programaciones cargadas: ${schedules.length}`, 'success');
-          schedules.forEach((schedule) => {
-            log(
-              `📅 ID: ${schedule.id} - Usuario: ${schedule.user.name} - Fecha: ${schedule.scheduledDate} - Hora: ${schedule.scheduledTime} - Activo: ${schedule.isActive}`,
-              'info',
-            );
-          });
+          renderSchedulesTable();
+          log(`📋 Programaciones cargadas: ${allSchedules.length}`, 'success');
         } catch (error) {
           log(`❌ Error cargando programaciones: ${error.message}`, 'error');
         }
       }
 
-      async function toggleSchedule() {
-        const scheduleId = document.getElementById('scheduleId').value;
+      function renderSchedulesTable() {
+        const tbody = document.getElementById('schedulesTableBody');
 
-        if (!scheduleId) {
-          log(`❌ Por favor ingrese el ID de la programación`, 'error');
+        if (allSchedules.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="8" style="padding: 20px; text-align: center; color: #666;">
+                No hay programaciones disponibles
+              </td>
+            </tr>
+          `;
           return;
         }
 
-        log(`🔄 Cambiando estado de programación ${scheduleId}`);
+        tbody.innerHTML = allSchedules
+          .map((schedule) => {
+            const date = new Date(schedule.scheduledDate).toLocaleDateString();
+            const recurringDays = schedule.recurringDays
+              ? JSON.parse(schedule.recurringDays).join(', ')
+              : 'No';
+
+            return `
+            <tr>
+              <td><strong>#${schedule.id}</strong></td>
+              <td>
+                <div style="font-weight: 600;">${schedule.user.name}</div>
+                <div style="font-size: 11px; color: #666;">${schedule.user.dni}</div>
+              </td>
+              <td>${date}</td>
+              <td><code>${schedule.scheduledTime}</code></td>
+              <td>${schedule.description || '<em>Sin descripción</em>'}</td>
+              <td>
+                ${
+                  schedule.isRecurring
+                    ? `<span style="color: #28a745;">✓ ${recurringDays}</span>`
+                    : '<span style="color: #6c757d;">No</span>'
+                }
+              </td>
+              <td>
+                <span class="status-badge ${schedule.isActive ? 'status-active' : 'status-inactive'}">
+                  ${schedule.isActive ? 'Activo' : 'Inactivo'}
+                </span>
+              </td>
+              <td style="text-align: center;">
+                <button onclick="editSchedule(${schedule.id})" class="btn-table btn-primary" title="Editar">
+                  ✏️
+                </button>
+                <button onclick="toggleScheduleStatus(${schedule.id})" class="btn-table ${schedule.isActive ? 'btn-warning' : 'btn-success'}" title="${schedule.isActive ? 'Desactivar' : 'Activar'}">
+                  ${schedule.isActive ? '⏸️' : '▶️'}
+                </button>
+                <button onclick="deleteSchedule(${schedule.id})" class="btn-table btn-danger" title="Eliminar">
+                  🗑️
+                </button>
+              </td>
+            </tr>
+          `;
+          })
+          .join('');
+      }
+
+      // Modal functions
+      function showCreateScheduleModal() {
+        document.getElementById('modalTitle').textContent =
+          'Nueva Programación';
+        document.getElementById('editScheduleId').value = '';
+        document.getElementById('scheduleForm').reset();
+        document.getElementById('modalScheduleTime').value = '10:00:00';
+
+        // Set default date to tomorrow
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        document.getElementById('modalScheduleDate').value = tomorrow
+          .toISOString()
+          .split('T')[0];
+
+        // Load users in modal
+        loadUsersInModal();
+
+        document.getElementById('scheduleModal').style.display = 'block';
+      }
+
+      function closeScheduleModal() {
+        document.getElementById('scheduleModal').style.display = 'none';
+      }
+
+      async function loadUsersInModal() {
+        const select = document.getElementById('modalUserSelect');
+        select.innerHTML = '<option value="">Cargando usuarios...</option>';
 
         try {
-          const response = await fetch(
-            `${API_BASE}/schedules/${scheduleId}/toggle`,
-            {
-              method: 'PATCH',
-            },
-          );
+          if (allUsers.length === 0) {
+            const response = await fetch(`${API_BASE}/users`);
+            allUsers = await response.json();
+          }
+
+          select.innerHTML = '<option value="">Seleccionar usuario...</option>';
+          allUsers.forEach((user) => {
+            const option = document.createElement('option');
+            option.value = user.id;
+            option.textContent = `${user.name} (${user.dni})`;
+            select.appendChild(option);
+          });
+        } catch (error) {
+          select.innerHTML =
+            '<option value="">Error cargando usuarios</option>';
+          log(`❌ Error cargando usuarios: ${error.message}`, 'error');
+        }
+      }
+
+      // Handle recurring checkbox
+      document.getElementById('modalIsRecurring').onchange = function () {
+        const recurringDiv = document.getElementById('modalRecurringDays');
+        recurringDiv.style.display = this.checked ? 'block' : 'none';
+      };
+
+      // Handle form submission
+      document.getElementById('scheduleForm').onsubmit = async function (e) {
+        e.preventDefault();
+
+        const scheduleId = document.getElementById('editScheduleId').value;
+        const isEdit = !!scheduleId;
+
+        const formData = {
+          userId: parseInt(document.getElementById('modalUserSelect').value),
+          scheduledDate: document.getElementById('modalScheduleDate').value,
+          scheduledTime: document.getElementById('modalScheduleTime').value,
+          description:
+            document.getElementById('modalScheduleDescription').value ||
+            'Registro automático',
+          isRecurring: document.getElementById('modalIsRecurring').checked,
+        };
+
+        if (formData.isRecurring) {
+          const days = [];
+          [
+            'modalMonday',
+            'modalTuesday',
+            'modalWednesday',
+            'modalThursday',
+            'modalFriday',
+            'modalSaturday',
+            'modalSunday',
+          ].forEach((id) => {
+            const checkbox = document.getElementById(id);
+            if (checkbox && checkbox.checked) {
+              days.push(checkbox.value);
+            }
+          });
+          formData.recurringDays = days;
+        }
+
+        try {
+          const url = isEdit
+            ? `${API_BASE}/schedules/${scheduleId}`
+            : `${API_BASE}/schedules`;
+          const method = isEdit ? 'PATCH' : 'POST';
+
+          const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData),
+          });
 
           const result = await response.json();
-          log(
-            `🔄 Estado cambiado: ${JSON.stringify(result)}`,
-            response.ok ? 'success' : 'error',
-          );
+
+          if (response.ok) {
+            log(
+              `✅ Programación ${isEdit ? 'actualizada' : 'creada'} exitosamente`,
+              'success',
+            );
+            closeScheduleModal();
+            loadSchedulesTable();
+          } else {
+            log(
+              `❌ Error: ${result.message || JSON.stringify(result)}`,
+              'error',
+            );
+          }
         } catch (error) {
-          log(`❌ Error cambiando estado: ${error.message}`, 'error');
+          log(`❌ Error: ${error.message}`, 'error');
         }
+      };
+
+      async function editSchedule(id) {
+        const schedule = allSchedules.find((s) => s.id === id);
+        if (!schedule) return;
+
+        document.getElementById('modalTitle').textContent =
+          'Editar Programación';
+        document.getElementById('editScheduleId').value = id;
+
+        // Load users first
+        await loadUsersInModal();
+
+        // Fill form
+        document.getElementById('modalUserSelect').value = schedule.userId;
+        document.getElementById('modalScheduleDate').value =
+          schedule.scheduledDate.split('T')[0];
+        document.getElementById('modalScheduleTime').value =
+          schedule.scheduledTime;
+        document.getElementById('modalScheduleDescription').value =
+          schedule.description || '';
+        document.getElementById('modalIsRecurring').checked =
+          schedule.isRecurring;
+
+        // Handle recurring days
+        const recurringDiv = document.getElementById('modalRecurringDays');
+        recurringDiv.style.display = schedule.isRecurring ? 'block' : 'none';
+
+        if (schedule.isRecurring && schedule.recurringDays) {
+          const days = JSON.parse(schedule.recurringDays);
+          [
+            'modalMonday',
+            'modalTuesday',
+            'modalWednesday',
+            'modalThursday',
+            'modalFriday',
+            'modalSaturday',
+            'modalSunday',
+          ].forEach((id) => {
+            const checkbox = document.getElementById(id);
+            if (checkbox) {
+              checkbox.checked = days.includes(checkbox.value);
+            }
+          });
+        }
+
+        document.getElementById('scheduleModal').style.display = 'block';
+      }
+
+      async function toggleScheduleStatus(id) {
+        try {
+          const response = await fetch(`${API_BASE}/schedules/${id}/toggle`, {
+            method: 'PATCH',
+          });
+
+          if (response.ok) {
+            log(`✅ Estado de programación ${id} cambiado`, 'success');
+            loadSchedulesTable();
+          } else {
+            log(`❌ Error cambiando estado de programación ${id}`, 'error');
+          }
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      async function deleteSchedule(id) {
+        if (!confirm('¿Estás seguro de eliminar esta programación?')) return;
+
+        try {
+          const response = await fetch(`${API_BASE}/schedules/${id}`, {
+            method: 'DELETE',
+          });
+
+          if (response.ok) {
+            log(`✅ Programación ${id} eliminada`, 'success');
+            loadSchedulesTable();
+          } else {
+            log(`❌ Error eliminando programación ${id}`, 'error');
+          }
+        } catch (error) {
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+      }
+
+      // System configuration functions
+      async function loadSystemConfig() {
+        log(`📊 Cargando configuración del sistema`);
+
+        try {
+          const response = await fetch(`${API_BASE}/tickets/status`);
+          systemConfig = await response.json();
+
+          // Fill configuration form
+          document.getElementById('currentJobs').value =
+            systemConfig.workerPool.currentJobs;
+          document.getElementById('maxConcurrent').value =
+            systemConfig.workerPool.maxConcurrent;
+          document.getElementById('availableSlots').value =
+            systemConfig.workerPool.availableSlots;
+          document.getElementById('defaultRequests').value =
+            systemConfig.configuration.defaultRequests;
+          document.getElementById('defaultInterval').value =
+            systemConfig.configuration.defaultInterval;
+          document.getElementById('apiUrl').value = systemConfig.apiUrl;
+
+          log(`✅ Configuración cargada`, 'success');
+        } catch (error) {
+          log(`❌ Error cargando configuración: ${error.message}`, 'error');
+        }
+      }
+
+      async function saveSystemConfig() {
+        const newConfig = {
+          maxConcurrent: parseInt(
+            document.getElementById('maxConcurrent').value,
+          ),
+          defaultRequests: document.getElementById('defaultRequests').value,
+          defaultInterval: document.getElementById('defaultInterval').value,
+          apiUrl: document.getElementById('apiUrl').value,
+        };
+
+        log(`💾 Guardando configuración...`);
+        log(
+          `📋 Nueva configuración: ${JSON.stringify(newConfig, null, 2)}`,
+          'info',
+        );
+
+        // Note: This would need backend endpoints to actually save the configuration
+        // For now, just show what would be saved
+        log(
+          `⚠️ Función de guardado pendiente de implementación en backend`,
+          'info',
+        );
       }
     </script>
   </body>
