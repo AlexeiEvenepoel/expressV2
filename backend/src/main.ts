@@ -6,3 +6,6 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
+app.enableCors({
+  origin: 'https://expressv2-production.up.railway.app',
+});
