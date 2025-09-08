@@ -336,7 +336,7 @@ export class TicketsService {
     };
   }
 
-  async scheduleTicketRegistration(userId: number, time: string = '10:00') {
+  async scheduleTicketRegistration(userId: number, time: string = '10:00:00') {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
     });
@@ -345,38 +345,62 @@ export class TicketsService {
       throw new Error(`User with ID ${userId} not found`);
     }
 
-    // Parse schedule time (format: HH:MM)
-    const [hour, minute] = time.split(':').map(Number);
+    // Parse schedule time (format: HH:MM:SS)
+    const timeParts = time.split(':').map(Number);
+    const hour = timeParts[0];
+    const minute = timeParts[1];
+    const second = timeParts[2] || 0; // Default to 0 if seconds not provided
+
+    // Validate time format
+    if (timeParts.length < 2 || timeParts.length > 3) {
+      throw new Error('Invalid time format. Use HH:MM or HH:MM:SS');
+    }
+
+    if (
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59 ||
+      second < 0 ||
+      second > 59
+    ) {
+      throw new Error(
+        'Invalid time values. Hours: 0-23, Minutes: 0-59, Seconds: 0-59',
+      );
+    }
 
     // Create a job name based on user
     const jobName = `ticket_registration_${user.id}`;
 
-    // Schedule the job - run Monday to Friday at the specified time
-    const job = schedule.scheduleJob(`${minute} ${hour} * * 1-5`, async () => {
-      this.logger.log(
-        `Running scheduled ticket registration for user ${user.name}`,
-      );
+    // Schedule the job - run Monday to Friday at the specified time with seconds
+    const job = schedule.scheduleJob(
+      `${second} ${minute} ${hour} * * 1-5`,
+      async () => {
+        this.logger.log(
+          `Running scheduled ticket registration for user ${user.name} at ${time}`,
+        );
 
-      // Usar el método paralelo para máxima eficiencia en horarios programados
-      try {
-        const results = await this.manualRegisterParallel(userId);
-        const successResults = results.filter((r) => r.code === 201);
+        // Usar el método paralelo para máxima eficiencia en horarios programados
+        try {
+          const results = await this.manualRegisterParallel(userId);
+          const successResults = results.filter((r) => r.code === 201);
 
-        if (successResults.length > 0) {
-          this.logger.log(
-            `¡Programación exitosa! ${successResults.length} tickets obtenidos para ${user.name}`,
-          );
-        } else {
-          this.logger.warn(
-            `Programación falló para ${user.name} - ningún ticket obtenido`,
+          if (successResults.length > 0) {
+            this.logger.log(
+              `¡Programación exitosa! ${successResults.length} tickets obtenidos para ${user.name}`,
+            );
+          } else {
+            this.logger.warn(
+              `Programación falló para ${user.name} - ningún ticket obtenido`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Error en programación para ${user.name}: ${error.message}`,
           );
         }
-      } catch (error) {
-        this.logger.error(
-          `Error en programación para ${user.name}: ${error.message}`,
-        );
-      }
-    });
+      },
+    );
 
     // Add job to registry so we can manage it later
     this.schedulerRegistry.addCronJob(jobName, job);
@@ -385,6 +409,7 @@ export class TicketsService {
       message: `Scheduled parallel ticket registration for user ${user.name} at ${time}`,
       method: 'parallel',
       jobName,
+      cronExpression: `${second} ${minute} ${hour} * * 1-5`,
     };
   }
 
