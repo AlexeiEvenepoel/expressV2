@@ -17,7 +17,11 @@ async function bootstrap() {
   });
 
   // Serve static files from public directory
-  app.useStaticAssets(join(__dirname, '..', 'public'));
+  app.useStaticAssets(join(process.cwd(), 'backend', 'public'));
+
+  // Set views directory for serving HTML files
+  app.setBaseViewsDir(join(process.cwd(), 'backend', 'public'));
+  app.setViewEngine('html');
 
   await app.listen(process.env.PORT ?? 3000);
 }

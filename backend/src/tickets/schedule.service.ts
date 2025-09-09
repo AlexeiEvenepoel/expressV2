@@ -196,20 +196,97 @@ export class ScheduleService implements OnModuleInit {
   }
 
   async updateSchedule(id: number, updateScheduleDto: UpdateScheduleDto) {
+    this.logger.log(
+      `Updating schedule ${id} with data: ${JSON.stringify(updateScheduleDto)}`,
+    );
+
     const existingSchedule = await this.findSchedule(id);
 
     // Remove old job if it exists
     await this.removeScheduledJob(existingSchedule);
 
+    // Prepare update data with proper validation and conversion
+    const updateData: any = {};
+
+    // Handle userId
+    if (updateScheduleDto.userId !== undefined) {
+      updateData.userId = updateScheduleDto.userId;
+    }
+
+    // Handle scheduledDate with proper conversion
+    if (updateScheduleDto.scheduledDate !== undefined) {
+      const scheduleDate = new Date(
+        updateScheduleDto.scheduledDate + 'T00:00:00',
+      );
+      if (isNaN(scheduleDate.getTime())) {
+        throw new Error(
+          `Invalid date format: ${updateScheduleDto.scheduledDate}`,
+        );
+      }
+      updateData.scheduledDate = scheduleDate;
+      this.logger.log(
+        `Converted date: ${updateScheduleDto.scheduledDate} -> ${scheduleDate.toISOString()}`,
+      );
+    }
+
+    // Handle scheduledTime with validation
+    if (updateScheduleDto.scheduledTime !== undefined) {
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/;
+      let normalizedTime = updateScheduleDto.scheduledTime;
+
+      if (!timeRegex.test(updateScheduleDto.scheduledTime)) {
+        // Try to add seconds if format is HH:MM
+        if (
+          /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(
+            updateScheduleDto.scheduledTime,
+          )
+        ) {
+          normalizedTime = `${updateScheduleDto.scheduledTime}:00`;
+        } else {
+          throw new Error(
+            `Invalid time format. Expected HH:MM:SS, got: ${updateScheduleDto.scheduledTime}`,
+          );
+        }
+      }
+      updateData.scheduledTime = normalizedTime;
+      this.logger.log(
+        `Normalized time: ${updateScheduleDto.scheduledTime} -> ${normalizedTime}`,
+      );
+    }
+
+    // Handle other fields
+    if (updateScheduleDto.description !== undefined) {
+      updateData.description = updateScheduleDto.description;
+    }
+
+    if (updateScheduleDto.isRecurring !== undefined) {
+      updateData.isRecurring = updateScheduleDto.isRecurring;
+    }
+
+    if (updateScheduleDto.isActive !== undefined) {
+      updateData.isActive = updateScheduleDto.isActive;
+    }
+
+    // Handle recurring days
+    if (updateScheduleDto.recurringDays !== undefined) {
+      if (
+        updateScheduleDto.recurringDays === null ||
+        updateScheduleDto.recurringDays.length === 0
+      ) {
+        updateData.recurringDays = null;
+      } else {
+        updateData.recurringDays = JSON.stringify(
+          updateScheduleDto.recurringDays,
+        );
+      }
+    }
+
+    this.logger.log(`Final update data: ${JSON.stringify(updateData)}`);
+
     // Update schedule in database
     const updatedSchedule = await this.prisma.schedule.update({
       where: { id },
-      data: {
-        ...updateScheduleDto,
-        recurringDays: updateScheduleDto.recurringDays
-          ? JSON.stringify(updateScheduleDto.recurringDays)
-          : undefined,
-      },
+      data: updateData,
       include: {
         user: true,
       },
