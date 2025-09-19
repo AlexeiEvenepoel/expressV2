@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { existsSync } from 'fs';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -16,12 +17,24 @@ async function bootstrap() {
     credentials: true,
   });
 
-  // Serve static files from public directory
-  app.useStaticAssets(join(process.cwd(), 'backend', 'public'));
+  // Serve static files from public directory - try multiple paths
+  const possiblePublicPaths = [
+    join(process.cwd(), 'backend', 'public'),
+    join(process.cwd(), 'public'),
+    join(__dirname, '..', 'public'),
+  ];
 
-  // Set views directory for serving HTML files
-  app.setBaseViewsDir(join(process.cwd(), 'backend', 'public'));
-  app.setViewEngine('html');
+  // Find the first path that exists
+  let publicPath = possiblePublicPaths[0]; // default
+  for (const path of possiblePublicPaths) {
+    if (existsSync(path)) {
+      publicPath = path;
+      break;
+    }
+  }
+
+  console.log(`Using public path: ${publicPath}`);
+  app.useStaticAssets(publicPath);
 
   await app.listen(process.env.PORT ?? 3000);
 }
